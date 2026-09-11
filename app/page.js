@@ -2,26 +2,326 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { BrandBar, Footer } from '../components/color-rush/SharedUI';
-import FullscreenScreen from '../components/color-rush/screens/FullscreenScreen';
-import RulesScreen from '../components/color-rush/screens/RulesScreen';
-import SetupScreen from '../components/color-rush/screens/SetupScreen';
-import GameScreen from '../components/color-rush/screens/GameScreen';
-import ResultScreen from '../components/color-rush/screens/ResultScreen';
-import LeaderboardScreen from '../components/color-rush/screens/LeaderboardScreen';
-import GuideModal from '../components/color-rush/modals/GuideModal';
-import CountdownOverlay from '../components/color-rush/modals/CountdownOverlay';
 import { initialGame, POINTS_CORRECT, POINTS_WRONG } from '../lib/color-rush/config';
 import {
-  getHostedProfiles,
-  localProfiles,
-  makeBoard,
-  normalizeName,
-  playTone,
-  postScore,
-  readCachedProfiles,
-  scorePayload,
-  writeCachedProfiles,
-} from '../lib/color-rush/client-utils';
+  ArrowLeft,
+  ArrowRight,
+  ArrowUpRight,
+  Check,
+  ChevronRight,
+  Clock3,
+  Crown,
+  ExternalLink,
+  Flame,
+  Instagram,
+  Pause,
+  Play,
+  RotateCcw,
+  Share2,
+  Sparkles,
+  Trophy,
+  X,
+  Zap,
+} from 'lucide-react';
+
+const COLORS = [
+  { name: 'Red', hex: '#ff668a' },
+  { name: 'Blue', hex: '#5bd9ff' },
+  { name: 'Purple', hex: '#b995ff' },
+  { name: 'Green', hex: '#7de8b7' },
+  { name: 'Yellow', hex: '#ffe28a' },
+  { name: 'Orange', hex: '#ffad74' },
+];
+
+const GAME_DURATION = 60;
+const TOTAL_CIRCLES = 25;
+const CORRECT_AUDIO_COUNT = 23;
+const LEADERBOARD_CACHE_KEY = 'colorRushLeaderboardCache';
+const LEADERBOARD_CACHE_AT_KEY = 'colorRushLeaderboardCacheAt';
+
+function makeBoard() {
+  const target = COLORS[Math.floor(Math.random() * COLORS.length)];
+  const promptColor = COLORS.filter((color) => color.name !== target.name)[Math.floor(Math.random() * (COLORS.length - 1))];
+  const board = Array.from({ length: TOTAL_CIRCLES }, () => COLORS[Math.floor(Math.random() * COLORS.length)]);
+  board[Math.floor(Math.random() * board.length)] = target;
+  return { target, promptColor, board };
+}
+
+function normalizeName(value) {
+  return String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function localProfiles() {
+  if (typeof window === 'undefined') return [];
+  try {
+    const entries = JSON.parse(window.localStorage.getItem('colorRushScores') || '[]');
+    const groups = new Map();
+    entries.forEach((entry) => {
+      const key = entry.playerNameKey || normalizeName(entry.playerName) || 'anonymous';
+      const group = groups.get(key) || {
+        playerName: entry.playerName || 'Anonymous',
+        topScore: -Infinity,
+        totalGames: 0,
+        averageAccuracy: 0,
+        lastPlayed: entry.playedAt,
+        history: [],
+      };
+      group.history.push({
+        score: Number(entry.score) || 0,
+        hits: Number(entry.hits) || 0,
+        attempts: Number(entry.attempts) || 0,
+        accuracy: Number(entry.accuracy) || 0,
+        playedAt: entry.playedAt,
+      });
+      group.totalGames = group.history.length;
+      group.topScore = Math.max(group.topScore, Number(entry.score) || 0);
+      group.averageAccuracy = Math.round(group.history.reduce((sum, item) => sum + item.accuracy, 0) / group.totalGames);
+      group.lastPlayed = new Date(entry.playedAt || 0) > new Date(group.lastPlayed || 0) ? entry.playedAt : group.lastPlayed;
+      groups.set(key, group);
+    });
+    return [...groups.values()].sort((a, b) => b.topScore - a.topScore);
+  } catch {
+    return [];
+  }
+}
+
+function readCachedProfiles() {
+  if (typeof window === 'undefined') return [];
+  try {
+    return JSON.parse(window.localStorage.getItem(LEADERBOARD_CACHE_KEY) || '[]');
+  } catch {
+    return [];
+  }
+}
+
+function writeCachedProfiles(profiles) {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(LEADERBOARD_CACHE_KEY, JSON.stringify(profiles));
+  window.localStorage.setItem(LEADERBOARD_CACHE_AT_KEY, String(Date.now()));
+}
+
+function formatDate(value) {
+  try {
+    return new Date(value || Date.now()).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+  } catch {
+    return 'recently';
+  }
+}
+
+function scorePayload(playerName, game) {
+  const accuracy = game.attempts ? Math.round((game.hits / game.attempts) * 100) : 0;
+  return {
+    playerName: playerName.slice(0, 15),
+    playerNameKey: normalizeName(playerName),
+    score: Number(game.score) || 0,
+    hits: game.hits,
+    attempts: game.attempts,
+    accuracy,
+    playedAt: new Date().toISOString(),
+  };
+}
+
+async function getHostedProfiles() {
+  const response = await fetch('/api/leaderboard', { headers: { Accept: 'application/json' }, cache: 'no-store' });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok || !body.ok) throw new Error(body.error || 'Leaderboard unavailable');
+  return Array.isArray(body.profiles) ? body.profiles : Array.isArray(body.scores) ? body.scores : [];
+}
+
+async function postScore(payload) {
+  try {
+    const response = await fetch('/api/submit-score', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return await response.json().catch(() => ({}));
+  } catch {
+    return { ok: false };
+  }
+}
+
+function playWrongFeedback() {
+  if (typeof window === 'undefined') return;
+  try {
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContext) return;
+    const context = new AudioContext();
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    oscillator.type = 'sawtooth';
+    oscillator.frequency.value = 160;
+    gain.gain.setValueAtTime(0.0001, context.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.07, context.currentTime + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.12);
+    oscillator.connect(gain).connect(context.destination);
+    oscillator.start();
+    oscillator.stop(context.currentTime + 0.13);
+  } catch {
+    // Sound is optional and can be blocked by the browser.
+  }
+  if (navigator.vibrate) navigator.vibrate([35, 35, 70]);
+}
+
+function Button({ children, variant = 'primary', className = '', ...props }) {
+  return (
+    <button className={`button button-${variant} ${className}`} {...props}>
+      {children}
+    </button>
+  );
+}
+
+function Eyebrow({ children, number }) {
+  return (
+    <div className="eyebrow">
+      <span className="eyebrow-line" />
+      {children}
+      {number ? <span className="eyebrow-number">{number}</span> : null}
+    </div>
+  );
+}
+
+function StatusPill({ synced = false }) {
+  return <span className={`status-pill ${synced ? 'is-synced' : ''}`}><span /> {synced ? 'SYNCED' : 'LOCAL CACHE'}</span>;
+}
+
+function LeaderboardPreview({ profiles, onViewAll, onSelect }) {
+  const top = profiles[0];
+  return (
+    <section className="leaderboard-preview" aria-label="Leaderboard preview">
+      <div className="preview-heading">
+        <div><span className="section-kicker"><Trophy size={13} /> LEADERBOARD</span><span className="preview-note">top player right now</span></div>
+        <button className="text-link" type="button" onClick={onViewAll}>View all <ArrowRight size={14} /></button>
+      </div>
+      {top ? (
+        <button className="preview-row" type="button" onClick={() => onSelect?.(top)}>
+          <span className="preview-rank"><Crown size={15} /> 01</span>
+          <span className="preview-player"><strong>{top.playerName || 'Anonymous'}</strong><small>{Number(top.totalGames || top.history?.length || 1)} {Number(top.totalGames || top.history?.length || 1) === 1 ? 'run' : 'runs'} · {Number(top.averageAccuracy || 0)}% avg</small></span>
+          <span className="preview-score">{Number(top.topScore ?? top.score ?? 0)}<small> pts</small><ChevronRight size={16} /></span>
+        </button>
+      ) : (
+        <div className="preview-empty"><Sparkles size={15} /> Your name could be up here.</div>
+      )}
+    </section>
+  );
+}
+
+function FullscreenScreen({ onEnter, onContinue }) {
+  return (
+    <section className="screen-card hero-screen fullscreen-screen">
+      <div className="hero-orbit orbit-one" /><div className="hero-orbit orbit-two" />
+      <Eyebrow number="00">IMMERSIVE MODE</Eyebrow>
+      <div className="hero-mark"><span /><span /><span /><span /><span /></div>
+      <h1>Make room for<br /><em>your reflexes.</em></h1>
+      <p className="hero-copy">A calmer canvas, cleaner timing, and a little more space to chase the next perfect hit.</p>
+      <Button onClick={onEnter}>Open the arena <ArrowUpRight size={17} /></Button>
+      <button className="quiet-button" type="button" onClick={onContinue}>Continue in window <ArrowRight size={14} /></button>
+      <p className="microcopy"><Zap size={12} /> Fullscreen is optional. The rush is not.</p>
+    </section>
+  );
+}
+
+function RulesScreen({ profiles, onEnterSetup, onViewLeaderboard, onSelectProfile }) {
+  return (
+    <section className="screen-card hero-screen rules-screen">
+      <Eyebrow number="01">NEURAL SPEED TEST</Eyebrow>
+      <div className="intro-row"><div><h1>Read the color name.<br /><em>Beat the clock.</em></h1><p className="hero-copy">Ignore the color of the word. Find the orb that matches the name you see.</p></div><div className="mini-spark"><Sparkles size={20} /><span>60<br /><small>SEC</small></span></div></div>
+      <div className="stat-strip"><div><strong>+5</strong><span>correct hit</span></div><div><strong>−3</strong><span>wrong orb</span></div><div><strong>25</strong><span>orbs per round</span></div></div>
+      <div className="how-row"><span className="step-number">01</span><span>Read the name</span><ChevronRight /><span className="step-number">02</span><span>Ignore its ink</span><ChevronRight /><span className="step-number">03</span><span>Tap the matching orb</span></div>
+      <LeaderboardPreview profiles={profiles} onViewAll={onViewLeaderboard} onSelect={onSelectProfile} />
+      <Button onClick={onEnterSetup}>Enter the arena <ArrowRight size={17} /></Button>
+      <p className="microcopy">Fast hands. Clear eyes. No second chances.</p>
+    </section>
+  );
+}
+
+function SetupScreen({ playerName, setPlayerName, error, onBack, onStart }) {
+  return (
+    <section className="screen-card setup-screen">
+      <Eyebrow number="02">PLAYER SETUP</Eyebrow>
+      <h2>Ready when <em>you are.</em></h2>
+      <p className="section-copy">Your best run gets a tiny place on the board. No account, no noise.</p>
+      <label className="field-label" htmlFor="player-name">Display name</label>
+      <input id="player-name" className={`name-input ${error ? 'has-error' : ''}`} value={playerName} onChange={(event) => setPlayerName(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') onStart(); }} maxLength={15} placeholder="e.g. rao.mynkk" autoComplete="nickname" autoFocus />
+      {error ? <p className="error-text">Please enter 2–15 characters.</p> : <p className="input-hint">2–15 characters · shown on the global board</p>}
+      <div className="setup-options"><div><span className="field-label">Round length</span><strong>60 seconds</strong></div><div><span className="field-label">Scoring</span><strong>+5 / −3</strong></div></div>
+      <Button onClick={onStart}>Start challenge <ArrowRight size={17} /></Button>
+      <button className="quiet-button" type="button" onClick={onBack}><ArrowLeft size={14} /> Back to rules</button>
+    </section>
+  );
+}
+
+function CountdownOverlay({ value }) {
+  return <div className="countdown-overlay" aria-live="assertive"><span>GET READY</span><strong>{value}</strong><small>COLOR RUSH</small></div>;
+}
+
+function GameScreen({ game, onOrb, onPause, onBack, onQuit }) {
+  const progress = Math.max(0, Math.min(100, (game.timeLeft / GAME_DURATION) * 100));
+  return (
+    <section className="game-screen">
+      <div className="game-topline"><button className="back-button" type="button" onClick={onBack}><ArrowLeft size={15} /> Back</button><div className="target-lock"><span className="target-kicker">CHOOSE THIS COLOR NAME <i /></span><div className="target-name-line"><strong style={{ color: game.promptColor?.hex }}>{game.target?.name?.toUpperCase()}</strong></div><span className="target-note">ignore the word's ink color</span></div><button className="icon-button" type="button" onClick={onPause} aria-label={game.paused ? 'Resume game' : 'Pause game'}>{game.paused ? <Play size={16} /> : <Pause size={16} />}</button></div>
+      <div className="hud-grid"><div className="hud-card timer-card"><div className="hud-card-top"><span className="hud-label"><Clock3 size={12} /> TIME LEFT</span><strong>{game.timeLeft.toFixed(1)}</strong></div><div className="progress-track"><span className={game.timeLeft <= 8 ? 'urgent' : ''} style={{ width: `${progress}%` }} /></div></div><div className="hud-card"><span className="hud-label">SCORE</span><strong>{game.score}</strong>{game.delta ? <span className={`score-delta ${game.delta > 0 ? 'positive' : 'negative'}`}>{game.delta > 0 ? '+' : '−'}{Math.abs(game.delta)}</span> : null}</div><div className="hud-card"><span className="hud-label">STREAK</span><strong>{game.streak}</strong><span className="hud-subline"><Flame size={12} /> {game.streak >= 3 ? 'on fire' : 'build it'}</span></div></div>
+      <div className="arena-wrap"><div className="arena-caption"><span>SELECT THE ORB NAMED ABOVE</span><span>ROUND {String(game.round).padStart(2, '0')}</span></div><div className="grid-board" aria-label={`Choose the ${game.target?.name || ''} orb`}>{game.board.map((color, index) => <button key={`${game.round}-${index}`} className="color-orb" type="button" aria-label={`${color.name} orb`} style={{ '--orb-color': color.hex, '--delay': `${(index % 5) * 18}ms` }} onPointerDown={(event) => { event.preventDefault(); onOrb(color, event.currentTarget); }} />)}</div>{game.paused ? <div className="pause-overlay"><span className="pause-icon"><Pause size={17} /></span><strong>Take a breath.</strong><span>Your board is waiting.</span><Button onClick={() => onPause(false)}>Resume <Play size={15} /></Button></div> : null}</div>
+      <div className="game-footer"><span aria-live="polite">{game.feedback}</span><button className="quiet-button danger" type="button" onClick={onQuit}>End round</button></div>
+    </section>
+  );
+}
+
+function ResultScreen({ result, profiles, onViewLeaderboard, onSelectProfile, onPlayAgain, onBack, onShare, shareFeedback }) {
+  return (
+    <section className="screen-card result-screen">
+      <Eyebrow number="04">ROUND COMPLETE</Eyebrow>
+      <div className="result-badge"><Check size={13} /> {result.isNewBest ? 'NEW PERSONAL BEST' : 'NICE RUN'}</div>
+      <h2>That was <em>fast.</em></h2>
+      <div className="final-score"><span>FINAL SCORE</span><strong>{result.score}</strong><small>points</small></div>
+      <div className="result-stats"><div><strong>{result.hits}</strong><span>hits</span></div><div><strong>{result.accuracy}%</strong><span>accuracy</span></div><div><strong>{result.bestScore}</strong><span>best score</span></div></div>
+      <LeaderboardPreview profiles={profiles} onViewAll={onViewLeaderboard} onSelect={onSelectProfile} />
+      <div className="result-actions"><Button onClick={onPlayAgain}>Play again <RotateCcw size={16} /></Button><Button variant="secondary" onClick={onShare}><Share2 size={15} /> Share result</Button></div>
+      {shareFeedback ? <p className="share-feedback">{shareFeedback}</p> : null}
+      <button className="quiet-button" type="button" onClick={onBack}><ArrowLeft size={14} /> Back to setup</button>
+    </section>
+  );
+}
+
+function ProfileDetail({ profile, onClose }) {
+  if (!profile) return null;
+  const history = Array.isArray(profile.history) ? profile.history : [];
+  return (
+    <section className="profile-detail" aria-live="polite"><div className="profile-head"><div><span className="section-kicker">PLAYER PROFILE</span><h3>{profile.playerName || 'Anonymous'}</h3></div><button className="icon-button subtle" type="button" onClick={onClose} aria-label="Close profile"><X size={16} /></button></div><div className="profile-stats"><div><strong>{Number(profile.topScore || 0)}</strong><span>top score</span></div><div><strong>{Number(profile.totalGames || history.length || 0)}</strong><span>total games</span></div><div><strong>{Number(profile.averageAccuracy || 0)}%</strong><span>avg accuracy</span></div></div><ol className="history-list">{history.length ? history.map((run, index) => <li key={`${run.playedAt}-${index}`}><span><b>#{String(index + 1).padStart(2, '0')}</b><small>{formatDate(run.playedAt)}</small></span><strong>{Number(run.score || 0)} <small>pts</small></strong></li>) : <li className="history-empty">No history yet.</li>}</ol></section>
+  );
+}
+
+function LeaderboardScreen({ profiles, loading, synced, error, selectedProfile, onSelect, onCloseProfile, onPlayAgain, onBack }) {
+  const rows = profiles.slice(0, 50).map((profile, index) => {
+    const runs = Number(profile.totalGames || profile.history?.length || 1);
+    return (
+      <li key={`${profile.playerName}-${index}`}>
+        <button type="button" className={`leaderboard-row ${index < 3 ? 'top-rank' : ''}`} onClick={() => onSelect(profile)}>
+          <span className="rank-badge">{index === 0 ? <Crown size={15} /> : String(index + 1).padStart(2, '0')}</span>
+          <span className="rank-copy"><strong>{profile.playerName || 'Anonymous'}</strong><small>{runs} {runs === 1 ? 'run' : 'runs'} · {Number(profile.averageAccuracy || 0)}% avg</small></span>
+          <span className="leader-score">{Number(profile.topScore ?? profile.score ?? 0)}<small> pts</small><ChevronRight size={16} /></span>
+        </button>
+      </li>
+    );
+  });
+
+  return (
+    <section className="screen-card leaderboard-screen">
+      <div className="leaderboard-header"><div><Eyebrow number="05">GLOBAL RANKINGS</Eyebrow><h2>Top <em>players.</em></h2><p className="section-copy">One profile. Every run. A little proof that you showed up.</p></div><StatusPill synced={synced} /></div>
+      {loading ? <div className="loading-state"><span className="loading-orb" /> syncing the arena…</div> : null}
+      {error ? <div className="offline-note">Showing the local board while the arena reconnects.</div> : null}
+      <ol className="leaderboard-list">
+        {!loading && profiles.length === 0 ? <li className="empty-leaderboard"><Sparkles size={17} /> No runs yet. Be the first name here.</li> : rows}
+      </ol>
+      <ProfileDetail profile={selectedProfile} onClose={onCloseProfile} />
+      <div className="leaderboard-actions"><Button variant="secondary" onClick={onPlayAgain}>Play another round <ArrowRight size={16} /></Button><button className="quiet-button" type="button" onClick={onBack}><ArrowLeft size={14} /> Back</button></div>
+    </section>
+  );
+}
+
+function GuideModal({ onClose, onStart }) {
+  return <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="guide-title"><div className="guide-modal"><button className="modal-close" type="button" onClick={onClose} aria-label="Close guide"><X size={17} /></button><Eyebrow number="03">QUICK GUIDE</Eyebrow><h2 id="guide-title">Read the name.<br /><em>Ignore the ink.</em></h2><div className="guide-visual"><img src="/how-to-play-guide.png" alt="A color-name matching guide" /></div><div className="guide-steps"><div><b>01</b><span><strong>Read the color name</strong> at the top of the arena.</span></div><div><b>02</b><span>Ignore its ink and tap the orb with the <strong>named color</strong>.</span></div><div><b>03</b><span>Correct <strong>+5</strong>, wrong orb <strong>−3</strong>.</span></div></div><Button onClick={onStart}>Got it — start in 3s <ArrowRight size={16} /></Button></div></div>;
+}
 
 export default function ColorRush() {
   const [screen, setScreen] = useState('fullscreen');
@@ -41,6 +341,8 @@ export default function ColorRush() {
   const gameRef = useRef(game);
   const timerRef = useRef(null);
   const countdownRef = useRef(null);
+  const correctAudioRef = useRef(null);
+  const lastCorrectAudioRef = useRef(null);
 
   useEffect(() => { gameRef.current = game; }, [game]);
 
@@ -70,6 +372,7 @@ export default function ColorRush() {
     return () => {
       clearInterval(timerRef.current);
       clearTimeout(countdownRef.current);
+      correctAudioRef.current?.pause();
     };
   }, [loadLeaderboard]);
 
@@ -142,15 +445,32 @@ export default function ColorRush() {
   };
 
   const startGame = () => {
-    const { target, board } = makeBoard();
-    setGame({ ...initialGame, target, board, round: 1, running: true });
+    const { target, promptColor, board } = makeBoard();
+    setGame({ ...initialGame, target, promptColor, board, round: 1, running: true });
     setShareFeedback('');
     setScreen('game');
   };
 
   const nextBoard = () => {
-    const { target, board } = makeBoard();
-    setGame((current) => ({ ...current, target, board, round: current.round + 1, delta: null }));
+    const { target, promptColor, board } = makeBoard();
+    setGame((current) => ({ ...current, target, promptColor, board, round: current.round + 1, delta: null }));
+  };
+
+  const playCorrectAudio = () => {
+    let clip = Math.floor(Math.random() * CORRECT_AUDIO_COUNT) + 1;
+    if (CORRECT_AUDIO_COUNT > 1) {
+      while (clip === lastCorrectAudioRef.current) clip = Math.floor(Math.random() * CORRECT_AUDIO_COUNT) + 1;
+    }
+    lastCorrectAudioRef.current = clip;
+
+    correctAudioRef.current?.pause();
+    const audio = new Audio(`/right/right${clip}.mp3`);
+    audio.volume = 0.6;
+    correctAudioRef.current = audio;
+    audio.addEventListener('ended', () => {
+      if (correctAudioRef.current === audio) correctAudioRef.current = null;
+    }, { once: true });
+    void audio.play().catch(() => {});
   };
 
   const handleOrb = (color, node) => {
@@ -161,7 +481,8 @@ export default function ColorRush() {
     const nextScore = Math.max(-999, current.score + (correct ? POINTS_CORRECT : -POINTS_WRONG));
     const nextStreak = correct ? current.streak + 1 : 0;
     setGame((value) => ({ ...value, score: nextScore, streak: nextStreak, hits: value.hits + (correct ? 1 : 0), attempts: value.attempts + 1, delta: correct ? POINTS_CORRECT : -POINTS_WRONG, feedback: correct ? (nextStreak >= 3 ? `Streak x${nextStreak} — keep going!` : 'Nice hit. Find the next one.') : 'Missed. Reset your focus.' }));
-    playTone(correct);
+    if (correct) playCorrectAudio();
+    else playWrongFeedback();
     window.setTimeout(() => { if (gameRef.current.running) nextBoard(); }, 90);
   };
 
