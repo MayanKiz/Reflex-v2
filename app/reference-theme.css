@@ -1,0 +1,27 @@
+/* Reference-inspired mobile app skin: deep navy glass, neon symbols, compact portrait layout. */
+.reference-game { width: min(100%, 520px); padding: 16px 14px 12px; border-radius: 28px; background: linear-gradient(160deg, rgba(7,15,32,.98), rgba(3,8,20,.98)); }
+.reference-game .game-topline { margin-bottom: 12px; }
+.symbol-target-panel { position: relative; display: grid; grid-template-columns: 74px 1fr; grid-template-areas: 'label label' 'symbol copy'; align-items: center; gap: 5px 14px; overflow: hidden; margin-bottom: 10px; padding: 14px 17px; border: 1px solid rgba(91,217,255,.46); border-radius: 17px; background: radial-gradient(circle at 85% 100%, rgba(187,166,255,.11), transparent 40%), linear-gradient(145deg, rgba(19,29,55,.9), rgba(8,13,29,.92)); }
+.symbol-target-panel::after { content: ''; position: absolute; right: -45px; bottom: -65px; width: 145px; height: 145px; border: 1px solid rgba(255,121,158,.48); border-radius: 50%; pointer-events: none; }
+.symbol-target-panel .target-panel-label { grid-area: label; }
+.target-symbol { grid-area: symbol; position: relative; z-index: 1; display: grid; place-items: center; width: 63px; height: 63px; border-radius: 17px; background: linear-gradient(145deg, rgba(255,255,255,.22), rgba(255,255,255,.03)); box-shadow: 0 0 27px color-mix(in srgb, currentColor 44%, transparent), inset 0 2px 8px rgba(255,255,255,.35); font: 600 48px/1 'Space Grotesk'; }
+.symbol-target-panel .target-panel-copy { grid-area: copy; position: relative; z-index: 1; display: flex; flex-direction: column; gap: 4px; }
+.symbol-target-panel .target-panel-copy strong { font: 600 clamp(24px, 7vw, 34px) 'Space Grotesk'; letter-spacing: -.04em; }
+.symbol-target-panel .target-panel-copy span { color: var(--muted-strong); font-size: 11px; }
+.reference-arena { padding: 12px 10px 10px; border-color: rgba(226,214,255,.18); background: rgba(4,10,25,.78); }
+.symbol-grid { width: 100%; max-width: 450px; gap: 9px; }
+.symbol-orb { display: grid; place-items: center; border: 0; color: color-mix(in srgb, var(--orb-color) 72%, #101329); }
+.symbol-orb span { position: relative; z-index: 1; font: 600 clamp(24px, 7vw, 45px)/1 'Space Grotesk'; text-shadow: 0 2px 2px rgba(0,0,0,.12); }
+.reference-game .hud-grid { grid-template-columns: repeat(2, 1fr); gap: 9px; }
+.reference-game .timer-card { grid-column: span 2; }
+.reference-game .hud-card { min-height: 64px; padding: 11px 13px; border-color: rgba(226,214,255,.18); background: rgba(5,12,28,.78); }
+.reference-game .hud-card strong { font-size: 25px; }
+.reference-game .command-panel { display: none; }
+.reference-game .countdown-overlay { background: rgba(3,8,20,.73); }
+.reference-game .game-footer { padding-top: 8px; }
+@media (max-width: 520px) {
+  .reference-game { min-height: calc(100dvh - 70px); max-height: calc(100dvh - 48px); overflow-y: auto; }
+  .reference-game .symbol-grid { gap: 7px; }
+  .symbol-target-panel { grid-template-columns: 62px 1fr; padding: 12px 14px; }
+  .target-symbol { width: 55px; height: 55px; font-size: 40px; }
+}

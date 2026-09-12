@@ -80,3 +80,36 @@ The main page is intentionally a state-and-navigation orchestrator. Visual and i
 
 The desktop arena uses a **4×4 board** and viewport-aware sizing so the player name, target, HUD, and controls remain visible at laptop 100% zoom. The body stays contained while the app stage handles any necessary internal overflow    .mynk.core
 
+
+
+## Reference-style mobile app UI
+
+The game UI now follows the supplied mobile reference: deep navy glass cards, neon gradient accents, compact portrait layout, a 4×4 glowing orb grid, symbol targets such as **Crown**, **Moon**, **Star**, **Diamond**, **Heart**, **Clover**, **Sun**, and **Spiral**, and an intentional mismatch between the target symbol text and its display color. The command must be read rather than solved by color alone.
+
+After every answer the board locks briefly and shows a one-second **NEXT ROUND** transition before the next challenge appears. Correct and wrong clicks use separate random audio pools. Existing `right1.mp3` through `right23.mp3` are used for correct clicks. Add future wrong sounds as `public/wrong/wrong1.mp3`, `wrong2.mp3`, and so on; the game already supports the numbered pool and falls back safely when a file is not present.
+
+## Install as an app
+
+The project includes an installable PWA manifest. Run the production server, open it from a phone, and choose **Add to Home Screen** or **Install app** from the browser menu:
+
+```bash
+npm install
+npm run build
+npm run start
+```
+
+For a hosted deployment, install the app from the deployed HTTPS URL. The app opens in standalone portrait mode and uses the supplied neon icon.
+
+## Build an Android APK
+
+This repository remains a Next.js app so the existing leaderboard/database API is preserved. To package the deployed app as an Android APK, use a Trusted Web Activity wrapper from a machine with the Android SDK installed:
+
+```bash
+npm install -g @bubblewrap/cli
+bubblewrap init --manifest https://YOUR_DEPLOYED_DOMAIN/manifest.webmanifest
+bubblewrap build
+```
+
+The generated APK is placed by Bubblewrap in its build output directory. Replace `YOUR_DEPLOYED_DOMAIN` with the live HTTPS deployment URL. Do not commit signing keys or keystores to GitHub. For a direct Android Studio wrapper, use the same manifest URL and the application name **Color Rush**.
+
+No database migration is required for the mobile UI, symbols, PWA metadata, or audio changes. The existing leaderboard and authentication/API code remains untouched.

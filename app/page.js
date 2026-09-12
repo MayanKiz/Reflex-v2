@@ -121,7 +121,7 @@ export default function ColorRush() {
     const current = gameRef.current;
     if (!current.running || current.paused || current.locked || !current.target) return;
     const responseTime = Number(((performance.now() - current.questionStartedAt) / 1000).toFixed(2));
-    const correct = color.name === current.target.name;
+    const correct = color.symbol?.name === current.target.symbol?.name;
     if (node) node.classList.add(correct ? 'hit' : 'miss');
     const nextScore = Math.max(-999, current.score + (correct ? POINTS_CORRECT : -POINTS_WRONG));
     const nextStreak = correct ? current.streak + 1 : 0;
