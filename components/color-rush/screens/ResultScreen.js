@@ -11,7 +11,7 @@ export default function ResultScreen({ result, profiles, onViewLeaderboard, onSe
       <div className="result-badge"><Check size={13} /> {result.isNewBest ? 'NEW PERSONAL BEST' : 'NICE RUN'}</div>
       <h2>That was <em>fast.</em></h2>
       <div className="final-score"><span>FINAL SCORE</span><strong>{result.score}</strong><small>points</small></div>
-      <div className="result-stats"><div><strong>{result.hits}</strong><span>hits</span></div><div><strong>{result.accuracy}%</strong><span>accuracy</span></div><div><strong>{result.bestScore}</strong><span>best score</span></div></div>
+      <div className="result-stats"><div><strong>{result.hits} / 15</strong><span>correct</span></div><div><strong>{result.wrong}</strong><span>wrong</span></div><div><strong>{result.accuracy}%</strong><span>accuracy</span></div><div><strong>{result.totalTime.toFixed(2)}s</strong><span>total time</span></div><div><strong>{result.averageTime.toFixed(2)}s</strong><span>average</span></div><div><strong>{result.bestStreak}</strong><span>best streak</span></div></div>
       <LeaderboardPreview profiles={profiles} onViewAll={onViewLeaderboard} onSelect={onSelectProfile} />
       <div className="result-actions"><Button onClick={onPlayAgain}>Play again <RotateCcw size={16} /></Button><Button variant="secondary" onClick={onShare}><Share2 size={15} /> Share result</Button></div>
       {shareFeedback ? <p className="share-feedback">{shareFeedback}</p> : null}
