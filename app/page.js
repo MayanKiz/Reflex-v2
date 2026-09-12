@@ -13,9 +13,8 @@ import CountdownOverlay from '../components/color-rush/modals/CountdownOverlay';
 import { initialGame, POINTS_CORRECT, POINTS_WRONG, QUESTION_TRANSITION_MS, TOTAL_QUESTIONS } from '../lib/color-rush/config';
 import { getHostedProfiles, localProfiles, makeBoard, normalizeName, postScore, readCachedProfiles, scorePayload, writeCachedProfiles } from '../lib/color-rush/client-utils';
 
-const CORRECT_AUDIO_FILES = Array.from({ length: 23 }, (_, index) => `/right/right${index + 1}.mp3`);
-// Add future files as wrongN.mp3; the pool is intentionally larger than today's upload.
-const WRONG_AUDIO_FILES = Array.from({ length: 40 }, (_, index) => `/wrong/wrong${index + 1}.mp3`);
+const CORRECT_AUDIO_FILES = Array.from({ length: 13 }, (_, index) => `/right/right${index + 1}.mp3`);
+const WRONG_AUDIO_FILES = Array.from({ length: 8 }, (_, index) => `/wrong/wrong${index + 1}.mp3`);
 
 function playRandomAudio(files, audioRef, lastIndexRef, fallback) {
   if (typeof window === 'undefined' || !files.length) return;
