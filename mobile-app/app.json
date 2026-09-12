@@ -1,0 +1,37 @@
+{
+  "expo": {
+    "name": "Color Rush — Reflex Arena",
+    "slug": "color-rush-reflex-arena",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "scheme": "colorrush",
+    "plugins": [
+      "expo-router",
+      "expo-av"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "android": {
+      "package": "com.reflexarena.colorrush",
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
+      ]
+    },
+    "ios": {
+      "bundleIdentifier": "com.reflexarena.colorrush"
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static"
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "be1c67f4-6a3d-4db0-b315-1670a3739e72"
+      }
+    }
+  }
+}
